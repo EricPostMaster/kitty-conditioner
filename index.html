@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Detector</title>
+</head>
+<body>
+    <h1 id="status">No cat detected</h1>
+    <video id="video" width="320" height="240" autoplay></video>
+    <textarea id="predictions" rows="5" cols="50" readonly></textarea>
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+        const predictionsBox = document.getElementById('predictions');
+        const modelUrl = 'mobilenet_v2.tflite'; // Make sure this path is correct
+
+        // Request access to the camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                video.play();
+            })
+            .catch(error => {
+                console.error('Error accessing the camera: ', error);
+            });
+
+        // Initialize the web worker
+        const worker = new Worker('tfjs_worker.js');
+
+        worker.onmessage = function(event) {
+            if (typeof event.data === 'string') {
+                console.log('Message from worker:', event.data);
+                if (event.data === 'Model loaded successfully') {
+                    startProcessing();
+                } else {
+                    console.error(event.data);
+                }
+            } else {
+                const { predictions } = event.data;
+                const top3 = predictions
+                    .map((value, index) => ({ value, index }))
+                    .sort((a, b) => b.value - a.value)
+                    .slice(0, 3);
+
+                console.log('Top 3 predictions: ', top3);
+
+                // Define cat classes based on ImageNet class indices
+                const catClasses = [281, 282, 283, 284, 285]; // Including additional cat classes
+
+                const catDetected = top3.some(prediction => catClasses.includes(prediction.index));
+                status.innerText = catDetected ? 'Cat detected!' : 'No cat detected';
+
+                predictionsBox.value = top3.map(prediction => 
+                    `Class: ${prediction.index}, Confidence: ${(prediction.value).toFixed(2)}%`
+                ).join('\n');
+            }
+        };
+
+        worker.postMessage({ modelUrl });
+
+        function startProcessing() {
+            // Process video frames
+            const processFrame = async () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 224;
+                canvas.height = 224;
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, 224, 224);
+                const imageData = context.getImageData(0, 0, 224, 224).data;
+                
+                worker.postMessage({ imageData });
+
+                requestAnimationFrame(processFrame);
+            };
+            processFrame();
+        }
+    </script>
+</body>
+</html>
