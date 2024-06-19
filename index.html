@@ -50,12 +50,18 @@
                 currentStream.getTracks().forEach(track => track.stop());
             }
 
-            const stream = await navigator.mediaDevices.getUserMedia({ 
+            const constraints = {
                 video: { deviceId: { exact: deviceId } }
-            });
-            currentStream = stream;
-            video.srcObject = stream;
-            video.play();
+            };
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                currentStream = stream;
+                video.srcObject = stream;
+                video.play();
+            } catch (error) {
+                console.error('Error accessing the camera: ', error);
+            }
         }
 
         cameraSelect.onchange = () => {
