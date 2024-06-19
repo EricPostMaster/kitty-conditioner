@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Detector</title>
+</head>
+<body>
+    <h1 id="status">No cat detected</h1>
+    <video id="video" width="320" height="240" autoplay></video>
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+        const modelUrl = 'mobilenet_v2.tflite'; // Make sure this path is correct
+
+        // Request access to the camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+                video.play();
+            })
+            .catch(error => {
+                console.error('Error accessing the camera: ', error);
+            });
+
+        // Initialize the web worker
+        const worker = new Worker('tfjs_worker.js');
+
+        worker.onmessage = function(event) {
+            if (typeof event.data === 'string') {
+                console.log('Message from worker:', event.data);
+                if (event.data === 'Model loaded successfully') {
+                    startProcessing();
+                } else {
+                    console.error(event.data);
+                }
+            } else {
+                const { isCatDetected } = event.data;
+                if (isCatDetected) {
+                    status.innerText = 'Cat detected!';
+                } else {
+                    console.log('No cat detected');
+                }
+            }
+        };
+
+        worker.postMessage({ modelUrl });
+
+        function startProcessing() {
+            // Process video frames
+            const processFrame = async () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 224;
+                canvas.height = 224;
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, 224, 224);
+                const imageData = context.getImageData(0, 0, 224, 224).data;
+                
+                worker.postMessage({ imageData });
+
+                requestAnimationFrame(processFrame);
+            };
+            processFrame();
+        }
+    </script>
+</body>
+</html>

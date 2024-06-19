@@ -6,6 +6,9 @@ importScripts('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-tflite@0.0.1-alpha.
 
 let model;
 
+// Assuming the prediction indices for cats are known, adjust as needed
+const catIndices = [281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293]; // Example indices for different classes of cats
+
 self.onmessage = async function(event) {
     const { modelUrl, imageData } = event.data;
     
@@ -32,6 +35,12 @@ self.onmessage = async function(event) {
 
         const tensor = tf.tensor(rgbData, [1, 224, 224, 3], 'int32');
         const predictions = model.predict(tensor);
+        
+        // Check if a cat is detected
+        const isCatDetected = predictions.some(prediction => catIndices.includes(prediction.index));
+        // Send back the result to the main thread
+        self.postMessage({ isCatDetected });
+
         const data = predictions.dataSync();
         self.postMessage({ predictions: Array.from(data) });
     }
