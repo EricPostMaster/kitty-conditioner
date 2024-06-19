@@ -4,26 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cat Detector</title>
+    <style>
+        #video {
+            width: 100%;
+            height: auto;
+            max-width: 320px;
+            max-height: 240px;
+        }
+    </style>
 </head>
 <body>
     <h1 id="status">No cat detected</h1>
-    <video id="video" width="320" height="240" autoplay playsinline muted></video>
+    <select id="cameraSelect"></select>
+    <video id="video" autoplay playsinline muted></video>
     <textarea id="predictions" rows="5" cols="50" readonly></textarea>
     <script>
         const video = document.getElementById('video');
         const status = document.getElementById('status');
         const predictionsBox = document.getElementById('predictions');
+        const cameraSelect = document.getElementById('cameraSelect');
         const modelUrl = 'mobilenet_v2.tflite'; // Make sure this path is correct
 
-        // Request access to the camera
-        navigator.mediaDevices.getUserMedia({ video: true })
-            .then(stream => {
-                video.srcObject = stream;
-                video.play();
-            })
-            .catch(error => {
-                console.error('Error accessing the camera: ', error);
+        let currentStream;
+
+        // Request access to the camera and list available cameras
+        async function getCameras() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+            cameraSelect.innerHTML = '';
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${index + 1}`;
+                cameraSelect.appendChild(option);
             });
+
+            if (videoDevices.length > 0) {
+                startVideo(videoDevices[0].deviceId);
+            }
+        }
+
+        async function startVideo(deviceId) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { deviceId: { exact: deviceId } }
+            });
+            currentStream = stream;
+            video.srcObject = stream;
+            video.play();
+        }
+
+        cameraSelect.onchange = () => {
+            startVideo(cameraSelect.value);
+        };
 
         // Initialize the web worker
         const worker = new Worker('tfjs_worker.js');
@@ -52,7 +89,7 @@
                 status.innerText = catDetected ? 'Cat detected!' : 'No cat detected';
 
                 predictionsBox.value = top3.map(prediction => 
-                    `Class: ${prediction.index}, Confidence: ${(prediction.value).toFixed(2)}%`
+                    `Class: ${prediction.index}, Confidence: ${(prediction.value * 100).toFixed(2)}%`
                 ).join('\n');
             }
         };
@@ -75,6 +112,8 @@
             };
             processFrame();
         }
+
+        getCameras();
     </script>
 </body>
 </html>
