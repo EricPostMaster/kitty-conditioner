@@ -35,13 +35,12 @@ self.onmessage = async function(event) {
 
         const tensor = tf.tensor(rgbData, [1, 224, 224, 3], 'int32');
         const predictions = model.predict(tensor);
-        
-        // Check if a cat is detected
-        const isCatDetected = predictions.some(prediction => catIndices.includes(prediction.index));
-        // Send back the result to the main thread
-        self.postMessage({ isCatDetected });
 
         const data = predictions.dataSync();
-        self.postMessage({ predictions: Array.from(data) });
+
+        // Check if a cat is detected
+        const isCatDetected = catIndices.some(index => data[index] >= 0.75);
+        // Send back the result to the main thread
+        self.postMessage({ isCatDetected, predictions: Array.from(data) });
     }
 };
