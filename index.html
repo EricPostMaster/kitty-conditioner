@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -135,6 +135,118 @@
         }
 
         getCameras();
+    </script>
+</body>
+</html> -->
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Detector</title>
+</head>
+<body>
+    <h1 id="status">No cat detected</h1>
+    <video id="video" width="320" height="240" autoplay></video>
+    <textarea id="predictions" rows="5" cols="50" readonly></textarea>
+    <br>
+    <label for="cameraSelector">Select Camera:</label>
+    <select id="cameraSelector"></select>
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+        const predictionsBox = document.getElementById('predictions');
+        const cameraSelector = document.getElementById('cameraSelector');
+        const modelUrl = 'mobilenet_v2.tflite'; // Make sure this path is correct
+
+        // Initialize the web worker
+        const worker = new Worker('tfjs_worker.js');
+
+        worker.onmessage = function(event) {
+            if (typeof event.data === 'string') {
+                console.log('Message from worker:', event.data);
+                if (event.data === 'Model loaded successfully') {
+                    startProcessing();
+                } else {
+                    console.error(event.data);
+                }
+            } else {
+                const { predictions } = event.data;
+                const top3 = predictions
+                    .map((value, index) => ({ value, index }))
+                    .sort((a, b) => b.value - a.value)
+                    .slice(0, 3);
+
+                console.log('Top 3 predictions: ', top3);
+
+                // Define cat classes based on ImageNet class indices
+                const catClasses = [281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293]; // Including additional cat classes
+
+                const catDetected = top3.some(prediction => catClasses.includes(prediction.index));
+                status.innerText = catDetected ? 'Cat detected!' : 'No cat detected';
+
+                predictionsBox.value = top3.map(prediction => 
+                    `Class: ${prediction.index}, Confidence: ${(prediction.value * 100).toFixed(2)}%`
+                ).join('\n');
+            }
+        };
+
+        worker.postMessage({ modelUrl });
+
+        async function getConnectedDevices(type) {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            return devices.filter(device => device.kind === type);
+        }
+
+        async function openCamera(cameraId) {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    deviceId: cameraId,
+                    width: { ideal: 320 },
+                    height: { ideal: 240 }
+                }
+            });
+            video.srcObject = stream;
+            video.play();
+        }
+
+        async function setupCameraSelector() {
+            const videoCameras = await getConnectedDevices('videoinput');
+            if (videoCameras && videoCameras.length > 0) {
+                videoCameras.forEach(camera => {
+                    const option = document.createElement('option');
+                    option.value = camera.deviceId;
+                    option.text = camera.label || `Camera ${cameraSelector.length + 1}`;
+                    cameraSelector.appendChild(option);
+                });
+
+                cameraSelector.onchange = () => openCamera(cameraSelector.value);
+                await openCamera(videoCameras[0].deviceId);
+            } else {
+                console.error('No video cameras found.');
+            }
+        }
+
+        function startProcessing() {
+            // Process video frames
+            const processFrame = async () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 224;
+                canvas.height = 224;
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, 224, 224);
+                const imageData = context.getImageData(0, 0, 224, 224).data;
+                
+                worker.postMessage({ imageData });
+
+                setTimeout(processFrame, 2000); // Reduce frame rate to once every 2 seconds
+            };
+            processFrame();
+        }
+
+        setupCameraSelector();
     </script>
 </body>
 </html>
