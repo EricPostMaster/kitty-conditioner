@@ -10,6 +10,7 @@
             height: auto;
             max-width: 320px;
             max-height: 240px;
+            transform: scaleX(-1); /* Mirror the camera feed */
         }
     </style>
 </head>
@@ -24,8 +25,22 @@
         const predictionsBox = document.getElementById('predictions');
         const cameraSelect = document.getElementById('cameraSelect');
         const modelUrl = 'mobilenet_v2.tflite'; // Make sure this path is correct
+        const labelsUrl = 'imagenet1000_clsidx_to_labels.txt'; // URL to the labels file
 
         let currentStream;
+        let labels = {};
+
+        // Fetch the labels
+        fetch(labelsUrl)
+            .then(response => response.text())
+            .then(text => {
+                labels = text.trim().split('\n').reduce((acc, line) => {
+                    const [index, label] = line.split(': ');
+                    acc[parseInt(index.trim())] = label.replace(/'/g, '').trim();
+                    return acc;
+                }, {});
+            })
+            .catch(error => console.error('Error fetching labels:', error));
 
         // Request access to the camera and list available cameras
         async function getCameras() {
@@ -80,22 +95,22 @@
                     console.error(event.data);
                 }
             } else {
-                const { predictions } = event.data;
+                const { isCatDetected, predictions } = event.data;
                 const top3 = predictions
                     .map((value, index) => ({ value, index }))
                     .sort((a, b) => b.value - a.value)
-                    .slice(0, 3);
+                    .slice(0, 8);
 
                 console.log('Top 3 predictions: ', top3);
 
                 // Define cat classes based on ImageNet class indices
-                const catClasses = [281, 282, 283, 284, 285]; // Including additional cat classes
+                const catClasses = [281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293]; // Including additional cat classes
 
                 const catDetected = top3.some(prediction => catClasses.includes(prediction.index));
-                status.innerText = catDetected ? 'Cat detected!' : 'No cat detected';
+                status.innerText = isCatDetected ? 'Cat detected!' : 'No cat detected';
 
                 predictionsBox.value = top3.map(prediction => 
-                    `Class: ${prediction.index}, Confidence: ${(prediction.value * 100).toFixed(2)}%`
+                    `Class: ${prediction.index} (${labels[prediction.index]}), Confidence: ${(prediction.value).toFixed(0)}%`
                 ).join('\n');
             }
         };
@@ -114,7 +129,7 @@
                 
                 worker.postMessage({ imageData });
 
-                requestAnimationFrame(processFrame);
+                setTimeout(processFrame, 2000); // Process frame every 2 seconds
             };
             processFrame();
         }
