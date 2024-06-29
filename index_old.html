@@ -1,0 +1,305 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cat Detector</title>
+    <style>
+        #video {
+            width: 100%;
+            height: auto;
+            max-width: 320px;
+            max-height: 240px;
+            transform: scaleX(-1); /* Mirror the camera feed */
+        }
+    </style>
+</head>
+<body>
+    <h1 id="status">No cat detected</h1>
+    <select id="cameraSelect"></select>
+    <video id="video" autoplay playsinline muted></video>
+    <textarea id="predictions" rows="5" cols="50" readonly></textarea>
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+        const predictionsBox = document.getElementById('predictions');
+        const cameraSelect = document.getElementById('cameraSelect');
+        const modelUrl = 'mobilenet_v2.tflite'; // Make sure this path is correct
+        const labelsUrl = 'imagenet1000_clsidx_to_labels.txt'; // URL to the labels file
+
+        let currentStream;
+        let labels = {};
+
+        // Fetch the labels
+        fetch(labelsUrl)
+            .then(response => response.text())
+            .then(text => {
+                labels = text.trim().split('\n').reduce((acc, line) => {
+                    const [index, label] = line.split(': ');
+                    acc[parseInt(index.trim())] = label.replace(/'/g, '').trim();
+                    return acc;
+                }, {});
+            })
+            .catch(error => console.error('Error fetching labels:', error));
+
+        // Request access to the camera and list available cameras
+        async function getCameras() {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+            cameraSelect.innerHTML = '';
+            videoDevices.forEach((device, index) => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.text = device.label || `Camera ${index + 1}`;
+                cameraSelect.appendChild(option);
+            });
+
+            if (videoDevices.length > 0) {
+                startVideo(videoDevices[0].deviceId);
+            }
+        }
+
+        async function startVideo(deviceId) {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            const constraints = {
+                video: { deviceId: { exact: deviceId } }
+            };
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                currentStream = stream;
+                video.srcObject = stream;
+                video.play();
+            } catch (error) {
+                console.error('Error accessing the camera: ', error);
+            }
+        }
+
+        cameraSelect.onchange = () => {
+            startVideo(cameraSelect.value);
+        };
+
+        // Initialize the web worker
+        const worker = new Worker('tfjs_worker.js');
+
+        worker.onmessage = function(event) {
+            if (typeof event.data === 'string') {
+                console.log('Message from worker:', event.data);
+                if (event.data === 'Model loaded successfully') {
+                    startProcessing();
+                } else {
+                    console.error(event.data);
+                }
+            } else {
+                const { isCatDetected, predictions } = event.data;
+                const top3 = predictions
+                    .map((value, index) => ({ value, index }))
+                    .sort((a, b) => b.value - a.value)
+                    .slice(0, 8);
+
+                console.log('Top 3 predictions: ', top3);
+
+                // Define cat classes based on ImageNet class indices
+                const catClasses = [281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293]; // Including additional cat classes
+
+                const catDetected = top3.some(prediction => catClasses.includes(prediction.index));
+                status.innerText = isCatDetected ? 'Cat detected!' : 'No cat detected';
+
+                predictionsBox.value = top3.map(prediction => 
+                    `Class: ${prediction.index} (${labels[prediction.index]}), Confidence: ${(prediction.value).toFixed(0)}%`
+                ).join('\n');
+            }
+        };
+
+        worker.postMessage({ modelUrl });
+
+        function startProcessing() {
+            // Process video frames
+            const processFrame = async () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = 224;
+                canvas.height = 224;
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, 224, 224);
+                const imageData = context.getImageData(0, 0, 224, 224).data;
+                
+                worker.postMessage({ imageData });
+
+                setTimeout(processFrame, 2000); // Process frame every 2 seconds
+            };
+            processFrame();
+        }
+
+        getCameras();
+    </script>
+</body>
+</html>
+ -->
+
+
+ <!DOCTYPE html>
+ <html lang="en">
+ <head>
+     <meta charset="UTF-8">
+     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+     <title>Cat Detector</title>
+     <style>
+         #video {
+             width: 100%;
+             height: auto;
+             max-width: 320px;
+             max-height: 240px;
+             transform: scaleX(-1); /* Mirror the camera feed */
+         }
+     </style>
+ </head>
+ <body>
+     <h1 id="status">No cat detected</h1>
+     <select id="cameraSelect"></select>
+     <video id="video" autoplay playsinline muted></video>
+     <textarea id="predictions" rows="5" cols="50" readonly></textarea>
+     <script>
+         const video = document.getElementById('video');
+         const status = document.getElementById('status');
+         const predictionsBox = document.getElementById('predictions');
+         const cameraSelect = document.getElementById('cameraSelect');
+         const modelUrl = 'mobilenet_v2.tflite'; // Make sure this path is correct
+         const labelsUrl = 'imagenet1000_clsidx_to_labels.txt'; // URL to the labels file
+ 
+         let currentStream;
+         let labels = {};
+ 
+         // Fetch the labels
+         fetch(labelsUrl)
+             .then(response => response.text())
+             .then(text => {
+                 labels = text.trim().split('\n').reduce((acc, line) => {
+                     const [index, label] = line.split(': ');
+                     acc[parseInt(index.trim())] = label.replace(/'/g, '').trim();
+                     return acc;
+                 }, {});
+             })
+             .catch(error => console.error('Error fetching labels:', error));
+ 
+         // Request access to the camera and list available cameras
+         async function getCameras() {
+             const devices = await navigator.mediaDevices.enumerateDevices();
+             const videoDevices = devices.filter(device => device.kind === 'videoinput');
+ 
+             cameraSelect.innerHTML = '';
+             videoDevices.forEach((device, index) => {
+                 const option = document.createElement('option');
+                 option.value = device.deviceId;
+                 option.text = device.label || `Camera ${index + 1}`;
+                 cameraSelect.appendChild(option);
+             });
+ 
+             cameraSelect.onchange = start;
+ 
+             if (videoDevices.length > 0) {
+                 startVideo(videoDevices[0].deviceId);
+             }
+         }
+ 
+         async function startVideo(deviceId) {
+             if (currentStream) {
+                 currentStream.getTracks().forEach(track => track.stop());
+             }
+ 
+             const constraints = {
+                 video: { deviceId: { exact: deviceId } }
+             };
+ 
+             try {
+                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                 currentStream = stream;
+                 video.srcObject = stream;
+                 video.play();
+             } catch (error) {
+                 console.error('Error accessing the camera: ', error);
+             }
+         }
+ 
+         function start() {
+             if (window.stream) {
+                 window.stream.getTracks().forEach(track => {
+                     track.stop();
+                 });
+             }
+             const videoSource = cameraSelect.value;
+             const constraints = {
+                 video: { deviceId: videoSource ? { exact: videoSource } : undefined }
+             };
+             navigator.mediaDevices.getUserMedia(constraints).then(gotStream).then(getCameras).catch(handleError);
+         }
+ 
+         function gotStream(stream) {
+             window.stream = stream;
+             video.srcObject = stream;
+             return navigator.mediaDevices.enumerateDevices();
+         }
+ 
+         function handleError(error) {
+             console.log('navigator.MediaDevices.getUserMedia error: ', error.message, error.name);
+         }
+ 
+         // Initialize the web worker
+         const worker = new Worker('tfjs_worker.js');
+ 
+         worker.onmessage = function(event) {
+             if (typeof event.data === 'string') {
+                 console.log('Message from worker:', event.data);
+                 if (event.data === 'Model loaded successfully') {
+                     startProcessing();
+                 } else {
+                     console.error(event.data);
+                 }
+             } else {
+                 const { isCatDetected, predictions } = event.data;
+                 const top3 = predictions
+                     .map((value, index) => ({ value, index }))
+                     .sort((a, b) => b.value - a.value)
+                     .slice(0, 8);
+ 
+                 console.log('Top 3 predictions: ', top3);
+ 
+                 // Define cat classes based on ImageNet class indices
+                 const catClasses = [281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293]; // Including additional cat classes
+ 
+                 const catDetected = top3.some(prediction => catClasses.includes(prediction.index));
+                 status.innerText = isCatDetected ? 'Cat detected!' : 'No cat detected';
+ 
+                 predictionsBox.value = top3.map(prediction => 
+                     `Class: ${prediction.index} (${labels[prediction.index]}), Confidence: ${(prediction.value).toFixed(0)}%`
+                 ).join('\n');
+             }
+         };
+ 
+         worker.postMessage({ modelUrl });
+ 
+         function startProcessing() {
+             // Process video frames
+             const processFrame = async () => {
+                 const canvas = document.createElement('canvas');
+                 canvas.width = 224;
+                 canvas.height = 224;
+                 const context = canvas.getContext('2d');
+                 context.drawImage(video, 0, 0, 224, 224);
+                 const imageData = context.getImageData(0, 0, 224, 224).data;
+                 
+                 worker.postMessage({ imageData });
+ 
+                 setTimeout(processFrame, 2000); // Process frame every 2 seconds
+             };
+             processFrame();
+         }
+ 
+         getCameras();
+     </script>
+ </body>
+ </html>
+ 
