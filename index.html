@@ -198,6 +198,8 @@
                  cameraSelect.appendChild(option);
              });
  
+             cameraSelect.onchange = start;
+ 
              if (videoDevices.length > 0) {
                  startVideo(videoDevices[0].deviceId);
              }
@@ -222,9 +224,28 @@
              }
          }
  
-         cameraSelect.onchange = () => {
-             startVideo(cameraSelect.value);
-         };
+         function start() {
+             if (window.stream) {
+                 window.stream.getTracks().forEach(track => {
+                     track.stop();
+                 });
+             }
+             const videoSource = cameraSelect.value;
+             const constraints = {
+                 video: { deviceId: videoSource ? { exact: videoSource } : undefined }
+             };
+             navigator.mediaDevices.getUserMedia(constraints).then(gotStream).then(getCameras).catch(handleError);
+         }
+ 
+         function gotStream(stream) {
+             window.stream = stream;
+             video.srcObject = stream;
+             return navigator.mediaDevices.enumerateDevices();
+         }
+ 
+         function handleError(error) {
+             console.log('navigator.MediaDevices.getUserMedia error: ', error.message, error.name);
+         }
  
          // Initialize the web worker
          const worker = new Worker('tfjs_worker.js');
